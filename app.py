@@ -12,7 +12,7 @@ Features:
 """
 
 import streamlit as st
-from deep_translator import GoogleTranslator
+from deep_translator import GoogleTranslator, MyMemoryTranslator
 from gtts import gTTS
 import io
 
@@ -82,20 +82,35 @@ if translate_btn:
     if not input_text.strip():
         st.warning("Please enter some text to translate.")
     else:
-        try:
-            src_code = "auto" if source_lang == "auto" else LANGUAGES[source_lang]
-            tgt_code = LANGUAGES[target_lang]
+        src_code = "auto" if source_lang == "auto" else LANGUAGES[source_lang]
+        tgt_code = LANGUAGES[target_lang]
 
+        translated = None
+
+        # Primary engine: Google Translate (via deep-translator)
+        try:
             translated = GoogleTranslator(
                 source=src_code,
                 target=tgt_code
             ).translate(input_text)
+        except Exception:
+            translated = None
 
+        # Fallback engine: MyMemory (used automatically if Google fails,
+        # e.g. temporary Error 500 / rate limiting)
+        if not translated:
+            try:
+                mm_source = "en-GB" if src_code == "auto" else src_code
+                translated = MyMemoryTranslator(
+                    source=mm_source,
+                    target=tgt_code
+                ).translate(input_text)
+            except Exception as e:
+                st.error(f"Translation failed with both engines: {e}")
+
+        if translated:
             st.session_state["translated_text"] = translated
             st.session_state["tgt_code"] = tgt_code
-
-        except Exception as e:
-            st.error(f"Translation failed: {e}")
 
 # ----------------------------
 # Display Result
@@ -115,9 +130,7 @@ if "translated_text" in st.session_state and st.session_state["translated_text"]
     with col_a:
         # Copy-friendly display using st.code (shows a built-in copy icon)
         st.caption("Click the icon in the box below to copy:")
-        st.code(st.session_state["translated_text"], language=None)
-
-    with col_b:
+        with col_b:
         st.caption("🔊 Listen to the translation:")
         try:
             tts = gTTS(
@@ -133,3 +146,4 @@ if "translated_text" in st.session_state and st.session_state["translated_text"]
 
 st.divider()
 st.caption("Built for the CodeAlpha AI Internship — Task 1: Language Translation Tool")
+        st.code(st.session_state["translated_text"], language=None)
